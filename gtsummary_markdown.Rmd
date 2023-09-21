@@ -1,0 +1,233 @@
+---
+title: "TX Culvert Microclimates - gtsummary practice"
+author: "Leah N. Crowley"
+date: "2023-09-19"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+![](culvertpic.jpg)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+# Call necessary packages to library for use:
+  library(ggplot2)
+  library(knitr)
+  library(tidyverse)
+  library(gtsummary)
+  library(gt)
+  library(flextable)
+  library(reshape)
+
+# Bring in data to use for assignment: 
+  texas <- read.csv("C:/Users/lcrowley1/OneDrive - Austin Peay State University/Desktop/Thesis/tx_df_for_model.csv")
+  ttest_texas <- texas %>% filter(site == "TAMU16" | site == "TAMU8")
+  allofit <- read.csv("allofit.csv")
+    allofit$WNS.status<-replace(allofit$WNS.status,allofit$WNS.status=="Postive","Positive") 
+    allofit$WNS.status<-replace(allofit$WNS.status,allofit$WNS.status=="Neg","Negative")
+    unique(allofit$WNS.status)
+
+```
+# 1. t-test Table and Figure
+<font size="4"> [**t-test**]{.underline} </font> For part one of this assignment, we need to carry out a **t-test**. T-tests are used to summarize and compare the means of two groups. Here, I am comparing the daily average temperatures and water vapor deficits (as well as the respective ranges and variances for each) of two culverts, named TAMU16 and TAMU8, for January, February, and March of 2023. Since this assignment focuses on using the [gtsummary](https://www.danieldsjoberg.com/gtsummary/) package to make tables, for the sake of presenting my work to the class, I will include both my code and the output in my final knitted .html file.
+
+<font size="3">*Mean values were calculated for the following variables for the t-test:* </font>
+
+-   Daily average temperature in culvert
+
+-   Daily range of culvert temperature
+
+-   Daily temperature variance in culvert
+
+-   Daily average water vapor deficit (DWVP) - the difference in water vapor pressure [kPa] between air and saturation at measured air temperature and relative humidity; higher water loss seen in WNS+ individuals)
+
+-   Daily range of DWVP in culvert
+
+-   Daily DWVP variance in culvert
+
+```{r t-test, echo=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# t-test: compare the means of different variables from data recorded in two culverts: TAMU16 and TAMU8.
+  table_texas1 <- texas %>%
+    filter(site == "TAMU16" | site == "TAMU8") %>%
+    select(site, daily.mean.temp, daily.temp.range, daily.temp.var, daily.mean.dwvp, daily.dwvp.range, daily.dwvp.var) %>%
+    tbl_summary(
+      by = site,
+      missing = "no",
+      digits = all_continuous() ~ 1,
+      label = list(
+        daily.mean.temp ~ "Daily Average Temperature (C)",
+        daily.temp.range ~ "Daily Temperature Range (C)",
+        daily.temp.var ~ "Daily Temperature Variance",
+        daily.mean.dwvp ~ "Daily Average Water Vapor Deficit (kPa)",
+        daily.dwvp.range ~ "Daily Water Vapor Deficit Range (kPa)",
+        daily.dwvp.var ~ "Daily Water Vapor Deficit Variance"
+      ), 
+    statistic = list(all_continuous() ~ "{mean} ({sd})", 
+                     all_categorical() ~ "{n}")) %>% 
+      add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2)) %>% 
+      modify_caption("Table 1. TX: Average Daily Culvert Temperature Over Winter") %>%
+      modify_header(
+        update = list(
+          label ~ '',
+          stat_1 ~ '**TAMU16**', 
+          stat_2 ~ '**TAMU8**',
+          p.value ~ '**P-value**'))
+
+# Output to show table with results:
+  table_texas1
+
+```
+
+<font size="4"> [**t-test results**]{.underline}</font> This table displays calculated means for each variable under their respective culvert, followed by the standard deviation in parenthesis. The p-values associated with the t-tests for each variable are shown on the right column. In this case, a Wilcoxon rank sum test was used, as my data was not normal. Looking at the table, it seems that all t-tests that were performed yielded statistically significant results, meaning that **culverts TAMU16 and TAMU8 had distinct differences in their daily average temperatures and water vapor deficits** (and their respective ranges and variances). The following ggplot figure visualizes these results. 
+
+```{r t-test plots, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+knitr::opts_chunk$set(echo=FALSE)
+
+# Make box and whisker plot for t-tests: 
+  # Displaying temperature:
+    tx.box.temp <- 
+      ggplot(data = ttest_texas, aes(x = site, y = daily.mean.temp)) +
+      geom_boxplot(fill = "pink") +
+      ggtitle("Daily Average Temperature (C) Over Winter by Site") +
+      stat_summary(fun=mean, geom='point', shape=20, size=8, color="hotpink1") +
+      xlab("Culvert") +
+      ylab("Temperature (C)") +
+      annotate("text", x = 1.5, y = 26.35,
+               label = c("(P-value <0.001)"))
+    theme_bw()
+  # Displaying water vapor deficit
+    tx.box.dwvp <- 
+      ggplot(data = ttest_texas, aes(x = site, y = daily.mean.dwvp)) +
+      geom_boxplot(fill = "pink") +
+      ggtitle("Daily Average Water Vapor Deficit (kPa) Over Winter by Site") +
+      stat_summary(fun=mean, geom='point', shape=20, size=8, color="hotpink1") +
+      xlab("Culvert") +
+      ylab("DWVP (kPa)") +
+      annotate("text", x = 1.5, y = 2.25,
+                label = c("(P-value <0.001)"))
+      theme_bw()  
+    
+# Output to display figures:
+  tx.box.temp
+  tx.box.dwvp
+  
+```
+
+# 2. ANOVA Table and Figure
+<font size="4">[**ANOVA**]{.underline}</font> For part two of this assignment, we need to carry out an **ANOVA**. We use ANOVAs to analyse differences in means between three or more groups. Here, I will expand on my t-test by including a few more culverts - TAMU27 and TAMU74. I will use the same variables for my ANOVA: the daily average temperatures and water vapor deficits (as well as the respective ranges and variances for each) for all four culverts over winter.
+
+```{r ANOVA, echo=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#ANOVA: comparing means between three or more groups
+  table_texas2 <- texas %>%
+    filter(site == "TAMU16" | site == "TAMU8" | site == "TAMU27" | site == "TAMU74") %>%
+    select(site, daily.mean.temp, daily.temp.range, daily.temp.var, daily.mean.dwvp, daily.dwvp.range, daily.dwvp.var) %>%
+    tbl_summary(
+      by = site,
+      missing = "no",
+      digits = all_continuous() ~ 1,
+      label = list(
+        daily.mean.temp ~ "Daily Average Temperature (C)",
+        daily.temp.range ~ "Daily Temperature Range (C)",
+        daily.temp.var ~ "Daily Temperature Variance",
+        daily.mean.dwvp ~ "Daily Average Water Vapor Deficit (kPa)",
+        daily.dwvp.range ~ "Daily Water Vapor Deficit Range (kPa)",
+        daily.dwvp.var ~ "Daily Water Vapor Deficit Variance"
+      ), 
+      statistic = list(all_continuous() ~ "{mean} ({sd})", 
+                       all_categorical() ~ "{n}")
+    ) %>% 
+    add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2)) %>% 
+    modify_caption("Table 2. Culvert Temperatures and Water Vapor Deficits Over Winter") %>%
+    modify_footnote(everything() ~ NA) %>%
+    modify_header(
+      update = list(
+        label ~ '',
+        stat_1 ~ '**TAMU16**', 
+        stat_2 ~ '**TAMU8**',
+        stat_3 ~ '**TAMU74**',
+        stat_4 ~ '**TAMU27**',
+        p.value ~ '**P-value**'))
+
+# Output to show table with results: 
+  table_texas2
+
+```
+
+<font size="4"> [**ANOVA results**]{.underline}</font> This table displays calculated means for each variable under their respective culvert, followed by the standard deviation in parenthesis. The p-values associated with the ANOVA for each variable are shown on the right column. Looking at the table, it seems that all t-tests that were performed yielded statistically significant results, meaning that **all four culverts had distinct differences in their daily average temperatures and water vapor deficits** (and their respective ranges and variances). The following ggplot figure visualizes these results.
+
+```{r ANOVA plot, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+
+# Make bar chart to display ANOVA results:
+  Temperature <- c(20.6, 17.2, 18.3, 18.8)
+  Water.Vapor.Deficit <- c(1.4, 0.3, 0.3, 0.7)
+  culvert <- c("TAMU16", "TAMU8", "TAMU74", "TAMU27")
+  
+  df1 <- data.frame(Temperature, Water.Vapor.Deficit, culvert)
+  df2 <- melt(df1, id.vars = 'culvert')
+  
+  variable_names <- list(
+    "Temperature" = "Temperature (C)" ,
+    "GDP_PPP" = "Water Vapor Deficit (kPa)")
+  
+  variable_labeller <- function(variable, value){
+    return(variable_names[value])
+  }
+  
+  tx.bar.anova <- ggplot(df2, aes(x=culvert, y=value, fill=variable)) +
+    geom_bar(stat = 'identity', fill="pink") +
+    geom_text(aes(label=value)) +
+    theme_bw() +
+    facet_wrap(~ variable, labeller=variable_labeller)
+
+# Output to display figure:
+  tx.bar.anova
+  
+```
+
+# 3. ANCOVA Table and Figure
+<font size="4">[**ANCOVA**]{.underline}</font> For part three of this assignment, we need to carry out an **ANCOVA**. ANCOVA means "analysis of covariance." We use ANCOVAs to analyze effects of categorical variables on a continuous dependent variable. Here, I will test the effects of categorical variable (WNS status) on the continuous variable (daily average dwvp). 
+
+```{r ANCOVA}
+knitr::opts_chunk$set(echo = TRUE)
+
+# ANCOVA: analyzing covariance - test effects of site type, WNS status, and latitude) on daily average dwvp.
+  table_texas3 <- allofit %>%
+      select(dWVP.mean, Temp.mean, Site.Type, WNS.status, Latitude) %>%
+      tbl_summary(by=WNS.status, 
+                  digits = all_continuous() ~ 1,
+                  include = c(dWVP.mean, Temp.mean, WNS.status),
+                  ) %>%
+      add_difference(adj.vars=c(WNS.status))
+ 
+# Output to show table with results:
+  table_texas3
+
+```
+
+<font size="4"> [**ANCOVA results**]{.underline}</font> 
+
+```{r ANCOVA plot, echo=FALSE}
+# Make scatterplot / regression plot to display ANCOVA:
+  model.1 <- lm(Temp.mean ~ dWVP.mean + WNS.status, data=allofit)
+  summary(model.1)
+  model.1_fortified <- fortify(model.1)
+  tx.scatter.ancova <- ggplot(model.1) + 
+    geom_point(aes(x = Temp.mean, y = dWVP.mean, color = WNS.status)) +
+    geom_line(aes(x = Temp.mean, y = .fitted, color = WNS.status)) +
+    geom_vline(xintercept = mean(allofit$Temp.mean), linetype='dashed', color='forestgreen', size=0.5) +
+    theme_bw() +
+    scale_color_manual(values = c("Negative" = "hotpink","Positive"="pink"))
+  
+# Output to display figure: 
+  tx.scatter.ancova
+```
+
